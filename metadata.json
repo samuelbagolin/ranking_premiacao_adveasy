@@ -1,0 +1,7 @@
+{
+  "name": "Churn AdvEasy - Sistema de Pontuação",
+  "description": "Plataforma de gamificação e acompanhamento de conversões para o time de Churn da AdvEasy, com ranking em tempo real e regras de pontuação automáticas.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
