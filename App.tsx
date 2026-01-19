@@ -1,47 +1,102 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { EMPLOYEES, STORAGE_KEY } from './constants';
+import { initializeApp } from 'firebase/app';
+import { getDatabase, ref, push, onValue, remove } from 'firebase/database';
+import { EMPLOYEES } from './constants';
 import { Submission, RankingEntry } from './types';
 import SubmissionForm from './components/SubmissionForm';
 import RankingTable from './components/RankingTable';
 
+// Configuração fornecida pelo usuário
+const firebaseConfig = {
+  apiKey: "AIzaSyAbaSREpw7GIPhUN1CkcNmp4wrYZVqker0",
+  authDomain: "ranking-premiacao-adveasy.firebaseapp.com",
+  databaseURL: "https://ranking-premiacao-adveasy-default-rtdb.firebaseio.com",
+  projectId: "ranking-premiacao-adveasy",
+  storageBucket: "ranking-premiacao-adveasy.firebasestorage.app",
+  messagingSenderId: "612863845485",
+  appId: "1:612863845485:web:47254c723c87f47a6e4b64",
+  measurementId: "G-EWCF8QVM2X"
+};
+
+// Inicialização segura
+let db: any;
+try {
+  const app = initializeApp(firebaseConfig);
+  db = getDatabase(app);
+} catch (error) {
+  console.error("Firebase Init Failed:", error);
+}
+
 const App: React.FC = () => {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [isSyncing, setIsSyncing] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
 
+  // Monitor de Conexão Real
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        setSubmissions(JSON.parse(saved));
-      } catch (e) { console.error("Intel corrupted", e); }
-    }
+    if (!db) return;
+    const connectedRef = ref(db, ".info/connected");
+    const unsub = onValue(connectedRef, (snap) => {
+      setIsConnected(snap.val() === true);
+    });
+    return () => unsub();
   }, []);
 
+  // Sync de Dados
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(submissions));
-  }, [submissions]);
+    if (!db) return;
+    const submissionsRef = ref(db, 'submissions');
+    const unsubscribe = onValue(submissionsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const list = Object.entries(data).map(([key, value]: [string, any]) => ({
+          ...value,
+          id: key
+        })) as Submission[];
+        setSubmissions(list.sort((a, b) => b.timestamp - a.timestamp));
+      } else {
+        setSubmissions([]);
+      }
+      setIsSyncing(false);
+    }, (error) => {
+      console.error("Firebase Sync Error:", error);
+      setIsSyncing(false);
+    });
 
-  const handleSubmission = (employeeId: string, lawyerName: string, evidenceBase64: string) => {
+    return () => unsubscribe();
+  }, []);
+
+  const handleSubmission = async (employeeId: string, lawyerName: string, evidenceBase64: string) => {
+    if (!isConnected) {
+      alert("SEM CONEXÃO COM O SATÉLITE. VERIFIQUE SUA INTERNET.");
+      return;
+    }
+
     const employee = EMPLOYEES.find(e => e.id === employeeId);
     if (!employee) return;
 
-    const newSubmission: Submission = {
-      id: Math.random().toString(36).substring(2, 9),
+    const newSubmission = {
       timestamp: Date.now(),
       employeeId,
-      lawyerName,
+      lawyerName: lawyerName.toUpperCase(),
       evidenceBase64,
       points: employee.weight
     };
 
-    setSubmissions(prev => [newSubmission, ...prev]);
+    try {
+      const submissionsRef = ref(db, 'submissions');
+      await push(submissionsRef, newSubmission);
+    } catch (e) {
+      console.error("Transmission Failed:", e);
+      alert("FALHA CRÍTICA NO ENVIO. TENTE NOVAMENTE.");
+    }
   };
 
   const ranking = useMemo(() => {
     return EMPLOYEES.map(emp => {
       const empSubmissions = submissions.filter(s => s.employeeId === emp.id);
-      const totalPoints = empSubmissions.reduce((sum, s) => sum + s.points, 0);
-      
+      const totalPoints = empSubmissions.reduce((sum, s) => sum + (s.points || 0), 0);
       return {
         ...emp,
         employeeId: emp.id,
@@ -51,11 +106,10 @@ const App: React.FC = () => {
     });
   }, [submissions]);
 
-  const recentSubmissions = useMemo(() => submissions.slice(0, 8), [submissions]);
+  const recentSubmissions = useMemo(() => submissions.slice(0, 10), [submissions]);
 
   return (
     <div className="min-h-screen relative bg-[#020617]">
-      {/* Background Decor */}
       <div className="fixed inset-0 pointer-events-none opacity-20">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/30 rounded-full blur-[120px]"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/30 rounded-full blur-[120px]"></div>
@@ -64,7 +118,7 @@ const App: React.FC = () => {
       <header className="sticky top-0 z-50 glass-card border-b border-white/5 px-8 py-5 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="relative group">
-            <div className="absolute -inset-1 bg-blue-500 rounded-lg blur opacity-70 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
+            <div className={`absolute -inset-1 rounded-lg blur opacity-70 transition duration-1000 ${isConnected ? 'bg-blue-500' : 'bg-red-500 animate-pulse'}`}></div>
             <div className="relative bg-black w-12 h-12 rounded-lg flex items-center justify-center font-orbitron font-black text-white text-2xl italic">
               AE
             </div>
@@ -74,9 +128,9 @@ const App: React.FC = () => {
               CHURN ADV<span className="text-blue-500">EASY</span>
             </h1>
             <div className="flex items-center gap-2 mt-1">
-               <span className="h-1 w-8 bg-blue-500 rounded-full"></span>
+               <span className={`h-1 w-8 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`}></span>
                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">
-                 Operations Terminal
+                 {isConnected ? 'Link Established' : 'Signal Lost - Reconnecting...'}
                </p>
             </div>
           </div>
@@ -84,13 +138,18 @@ const App: React.FC = () => {
 
         <div className="hidden lg:flex items-center gap-8">
            <div className="text-right">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Global Status</p>
-              <p className="text-sm font-orbitron font-bold text-green-500 uppercase">System Online</p>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Database Health</p>
+              <p className={`text-sm font-orbitron font-bold uppercase ${isConnected ? 'text-green-500' : 'text-red-500'}`}>
+                {isConnected ? 'System Online' : 'System Offline'}
+              </p>
            </div>
            <div className="h-10 w-[1px] bg-white/10"></div>
            <div className="flex gap-4">
-              <div className="w-8 h-8 rounded border border-white/10 flex items-center justify-center text-slate-500 hover:text-white transition-colors cursor-pointer">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+              <div className={`px-3 py-1 rounded border flex items-center gap-2 ${isConnected ? 'border-blue-500/30 bg-blue-500/10' : 'border-red-500/30 bg-red-500/10'}`}>
+                 <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-blue-500 animate-pulse' : 'bg-red-500'}`}></div>
+                 <span className={`text-[10px] font-black uppercase tracking-widest font-orbitron ${isConnected ? 'text-blue-400' : 'text-red-400'}`}>
+                   {isConnected ? 'Cloud Sync active' : 'Disconnected'}
+                 </span>
               </div>
            </div>
         </div>
@@ -98,8 +157,6 @@ const App: React.FC = () => {
 
       <main className="max-w-[1400px] mx-auto px-6 lg:px-12 mt-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-          
-          {/* Action Hub */}
           <div className="lg:col-span-5 space-y-10">
             <div className="glass-card rounded-2xl p-8 border-white/5 neon-border-blue">
                <SubmissionForm onSubmit={handleSubmission} />
@@ -108,7 +165,7 @@ const App: React.FC = () => {
             <div className="glass-card rounded-2xl p-6 border-white/5">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xs font-orbitron font-black text-white uppercase tracking-[0.3em]">MISSION LOG</h3>
-                <span className="text-[10px] text-slate-600 font-bold uppercase italic">V. 2.0.4-Stable</span>
+                <span className="text-[10px] text-slate-600 font-bold uppercase italic">Recent Operations</span>
               </div>
               <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                 {recentSubmissions.map(s => {
@@ -116,66 +173,43 @@ const App: React.FC = () => {
                   return (
                     <div key={s.id} className="group flex items-center justify-between bg-slate-900/40 p-3 rounded-lg border border-white/5 hover:border-white/20 transition-all">
                       <div className="flex items-center gap-3">
-                        <div className={`w-1 h-8 rounded-full ${emp?.color.replace('text-', 'bg-')}`}></div>
+                        <div className={`w-1 h-8 rounded-full ${emp?.color.replace('text-', 'bg-') || 'bg-slate-700'}`}></div>
                         <div>
                           <p className="text-sm font-bold text-slate-200 group-hover:text-white transition-colors">{s.lawyerName}</p>
                           <p className="text-[10px] text-slate-500 font-medium uppercase tracking-tighter">
-                            Operative: <span className={emp?.color}>{emp?.name}</span> • {new Date(s.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            Operative: <span className={emp?.color}>{emp?.name || 'Unknown'}</span>
                           </p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <span className={`text-xs font-black font-orbitron ${emp?.color}`}>+{s.points.toFixed(1)} CP</span>
+                        <span className={`text-xs font-black font-orbitron ${emp?.color || 'text-slate-400'}`}>+{(s.points || 0).toFixed(1)} CP</span>
                       </div>
                     </div>
                   );
                 })}
-                {recentSubmissions.length === 0 && (
-                   <div className="py-8 text-center">
-                      <p className="text-[10px] font-black text-slate-700 uppercase tracking-widest animate-pulse">Scanning for data...</p>
-                   </div>
-                )}
               </div>
             </div>
           </div>
 
-          {/* Leaderboard Section */}
           <div className="lg:col-span-7 space-y-10">
             <div className="glass-card rounded-2xl p-8 lg:p-10 border-white/10">
               <RankingTable entries={ranking} />
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-               {[
-                 { label: "Rules of Engagement", text: "Mandatory evidence upload for all combat points." },
-                 { label: "Real-time Ops", text: "System syncs globally with zero latency for transparent ranking." },
-                 { label: "Operative Multiplier", text: "Consecutive lawyer interactions valid per session rules." }
-               ].map((rule, idx) => (
-                 <div key={idx} className="p-5 rounded-xl bg-slate-900/40 border border-white/5 hover:border-blue-500/30 transition-colors">
-                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-2 font-orbitron">{rule.label}</p>
-                    <p className="text-xs text-slate-400 leading-relaxed font-rajdhani font-medium uppercase tracking-wider">{rule.text}</p>
-                 </div>
-               ))}
-            </div>
           </div>
-
         </div>
       </main>
 
       <footer className="mt-20 pb-10 flex flex-col items-center gap-4">
-         <div className="h-[1px] w-48 bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
          <button 
-           onClick={() => {
-             if(confirm('TERMINATE ALL DATA SESSIONS? THIS CANNOT BE UNDONE.')) {
-               setSubmissions([]);
-               localStorage.removeItem(STORAGE_KEY);
+           onClick={async () => {
+             if(confirm('PURGE GLOBAL DATABASE?')) {
+               await remove(ref(db, 'submissions'));
              }
            }}
            className="text-[10px] font-black text-slate-700 hover:text-red-500 transition-colors uppercase tracking-[0.4em] font-orbitron"
          >
-           [ TERMINATE_DATA_STREAM ]
+           [ PURGE_DATABASE ]
          </button>
-         <p className="text-[10px] font-bold text-slate-800 uppercase tracking-widest">© 2025 ADVEASY CYBER-NETWORKS // ALL RIGHTS RESERVED</p>
       </footer>
     </div>
   );
