@@ -69,13 +69,6 @@
       .glow-text-purple { text-shadow: 0 0 10px #d946ef; }
       .glow-text-orange { text-shadow: 0 0 10px #f97316; }
 
-      /* Cyber Frame Decoration */
-      .cyber-frame {
-        position: relative;
-        padding: 2px;
-        background: linear-gradient(45deg, transparent 5%, #1e293b 5%, #1e293b 95%, transparent 95%);
-      }
-
       /* Character Card HUD */
       .hud-bracket-tl { position: absolute; top: 0; left: 0; width: 15px; height: 15px; border-top: 3px solid currentColor; border-left: 3px solid currentColor; }
       .hud-bracket-br { position: absolute; bottom: 0; right: 0; width: 15px; height: 15px; border-bottom: 3px solid currentColor; border-right: 3px solid currentColor; }
@@ -85,18 +78,22 @@
       ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
       ::-webkit-scrollbar-thumb:hover { background: #475569; }
     </style>
-  <script type="importmap">
+    <script type="importmap">
 {
   "imports": {
-    "react": "https://esm.sh/react@^19.2.3",
+    "react": "https://esm.sh/react@19.0.0",
+    "react-dom": "https://esm.sh/react-dom@19.0.0",
+    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "react/": "https://esm.sh/react@^19.2.3/"
   }
 }
 </script>
-</head>
+  </head>
   <body>
     <div class="grid-bg"></div>
     <div id="root"></div>
+    <!-- Script essencial para carregar o aplicativo -->
+    <script type="module" src="./index.tsx"></script>
   </body>
 </html>
