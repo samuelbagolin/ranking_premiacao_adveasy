@@ -19,7 +19,7 @@ export const EMPLOYEES: Employee[] = [
     name: 'Jeniffer',
     sector: Sector.ONGOING,
     weight: 0.5,
-    avatar: 'https://i.postimg.cc/t4sSrHzV/Chat-GPT-Image-19-de-jan-de-2026-14-41-15.png',
+    avatar: 'https://i.postimg.cc/P50Vprwf/Chat-GPT-Image-19-de-jan-de-2026-16-33-19.png',
     color: 'text-fuchsia-500',
     borderColor: 'neon-border-purple',
     glowColor: 'glow-text-purple',

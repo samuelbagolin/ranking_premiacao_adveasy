@@ -200,16 +200,8 @@ const App: React.FC = () => {
       </main>
 
       <footer className="mt-20 pb-10 flex flex-col items-center gap-4">
-         <button 
-           onClick={async () => {
-             if(confirm('PURGE GLOBAL DATABASE?')) {
-               await remove(ref(db, 'submissions'));
-             }
-           }}
-           className="text-[10px] font-black text-slate-700 hover:text-red-500 transition-colors uppercase tracking-[0.4em] font-orbitron"
-         >
-           [ PURGE_DATABASE ]
-         </button>
+         {/* Botão Purge removido conforme solicitação */}
+         <p className="text-[10px] font-bold text-slate-800 uppercase tracking-widest">© 2026 ADVEASY CYBER-NETWORKS // CLOUD POWERED</p>
       </footer>
     </div>
   );
